@@ -1,10 +1,25 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Navbar from './components/layout/Navbar'
+import Footer from './components/layout/Footer'
+import ScamDetector from './pages/ScamDetector'
+import FraudAdvisor from './pages/FraudAdvisor'
+import NetworkMap from './pages/NetworkMap'
+
 function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <h1 className="font-display text-4xl font-bold text-[var(--color-danger)]">
-        Project Shield is alive
-      </h1>
-    </div>
+    <BrowserRouter>
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-1">
+          <Routes>
+            <Route path="/" element={<ScamDetector />} />
+            <Route path="/advisor" element={<FraudAdvisor />} />
+            <Route path="/network" element={<NetworkMap />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
+    </BrowserRouter>
   )
 }
 
