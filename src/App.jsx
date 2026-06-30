@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/layout/Navbar'
 import Footer from './components/layout/Footer'
 import ScamDetector from './pages/ScamDetector'
-import FraudAdvisor from './pages/FraudAdvisor'
+import LiveShield from './pages/LiveShield'
 import NetworkMap from './pages/NetworkMap'
 
 function App() {
@@ -13,7 +13,7 @@ function App() {
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<ScamDetector />} />
-            <Route path="/advisor" element={<FraudAdvisor />} />
+            <Route path="/live-shield" element={<LiveShield />} />
             <Route path="/network" element={<NetworkMap />} />
           </Routes>
         </main>

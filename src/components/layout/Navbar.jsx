@@ -3,7 +3,7 @@ import { Shield } from 'lucide-react'
 
 const tabs = [
   { to: '/', label: 'Scam Detector' },
-  { to: '/advisor', label: 'Fraud Advisor' },
+  { to: '/live-shield', label: 'Live Shield' },
   { to: '/network', label: 'Network Map' },
 ]
 
