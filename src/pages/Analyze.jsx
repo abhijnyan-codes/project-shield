@@ -1,6 +1,21 @@
 import { useState, useRef, useEffect } from "react"
 import { analyzeScam } from "../lib/groq"
-import { Shield, Send, FileText, AlertTriangle, Lock, Zap, RefreshCcw, Mic, Paperclip, Square, X } from "lucide-react"
+import { transcribeAudio } from "../lib/groq"
+import { generateIncidentReport } from "../lib/reportGenerator"
+import { 
+  Shield, 
+  Send, 
+  FileText, 
+  AlertTriangle, 
+  Lock, 
+  Zap, 
+  RefreshCcw, 
+  Mic, 
+  Paperclip, 
+  Square, 
+  X, 
+  FileDown
+} from "lucide-react"
 
 function RiskBadge({ level }) {
   const styles = {
@@ -65,7 +80,8 @@ function ShieldMessage({ result }) {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 mt-1">
+        {/* Action Row */}
+        <div className="flex flex-wrap items-center gap-2 mt-1">
           <a
             href="https://cybercrime.gov.in"
             target="_blank"
@@ -74,9 +90,29 @@ function ShieldMessage({ result }) {
           >
             Report to Cybercrime Portal
           </a>
+
+          <button
+            onClick={() => {
+              const reportData = {
+                riskLevel: result.riskLevel,
+                summary: result.summary,
+                redFlags: result.redFlags || [],
+                flaggedPhrases: result.flaggedPhrases || [],
+                advice: result.advice,
+                transcript: result.transcript || "No transcript available",
+                timestamp: new Date().toISOString(),
+              }
+              generateIncidentReport(reportData)
+            }}
+            className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition shadow-sm"
+          >
+            <FileDown className="w-3.5 h-3.5 inline mr-1" />
+            PDF Report
+          </button>
+
           <button
             onClick={() => navigator.clipboard.writeText(`SCAM ALERT: ${result.summary}\nAction: ${result.advice}`)}
-            className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition shadow-sm"
+            className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition shadow-sm ml-auto"
           >
             Copy Warning
           </button>
@@ -122,58 +158,218 @@ export default function Analyze() {
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
 
-  // Multi-modal state
+  // ─── Multi-modal state ──────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
   const [attachment, setAttachment] = useState(null)
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false)
+  const [transcriptionResult, setTranscriptionResult] = useState(null)
+  
   const fileInputRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const timerRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, loading])
+  }, [messages, loading, isProcessingAudio])
 
-  // File Handlers
-  const handleFileChange = (e) => {
+  // ─── File Upload ──────────────────────────────────────────────────
+  const handleFileChange = async (e) => {
     const file = e.target.files[0]
-    if (file) {
+    if (!file) return
+
+    // Validate file size (max 25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      alert("File too large. Please upload a file under 25MB.")
+      return
+    }
+
+    // Validate file type
+    const validTypes = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/m4a", "audio/ogg", "audio/webm", "audio/mp4"]
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|ogg|webm|mp4|mpga)$/i)) {
+      alert("Please upload a valid audio file (MP3, WAV, M4A, OGG, WebM, or MP4).")
+      return
+    }
+
+    // If it's an audio file, transcribe it
+    if (file.type.startsWith("audio/") || file.name.match(/\.(mp3|wav|m4a|ogg|webm|mp4|mpga)$/i)) {
+      await processAudioFile(file)
+    } else {
       setAttachment(file)
-      // You can trigger auto-analysis here, or wait for them to press send.
     }
   }
 
-  const handleMicToggle = () => {
-    setIsRecording(!isRecording)
-    // Hook up to your Whisper logic here
+  // ─── Process Audio File ──────────────────────────────────────────
+  const processAudioFile = async (file) => {
+    // Show user message with file name
+    setMessages(prev => [...prev, { 
+      type: "user", 
+      text: `🎤 Uploaded: ${file.name}`
+    }])
+    
+    setIsProcessingAudio(true)
+    setLoading(true)
+
+    try {
+      console.log("Starting transcription for:", file.name, "Size:", file.size, "Type:", file.type)
+      
+      // Transcribe with Whisper
+      const transcribedText = await transcribeAudio(file)
+      
+      console.log("Transcription result:", transcribedText)
+      
+      if (!transcribedText || transcribedText.trim().length === 0) {
+        setMessages(prev => [...prev, {
+          type: "shield",
+          result: {
+            riskLevel: "LOW",
+            summary: "No speech detected in the audio. Please try a clearer recording with speech.",
+            redFlags: [],
+            flaggedPhrases: [],
+            advice: "Make sure the audio contains clear speech and try again. Only recordings with speech can be analyzed for scams."
+          }
+        }])
+        setIsProcessingAudio(false)
+        setLoading(false)
+        return
+      }
+
+      // Show transcribed text as user message (truncated if long)
+      const displayText = transcribedText.length > 200 
+        ? transcribedText.substring(0, 200) + "..." 
+        : transcribedText
+      
+      setMessages(prev => [...prev, { 
+        type: "user", 
+        text: `📝 Transcribed: "${displayText}"`
+      }])
+
+      // Analyze the transcribed text
+      const result = await analyzeScam(transcribedText)
+      setMessages(prev => [...prev, { type: "shield", result }])
+
+    } catch (err) {
+      console.error("Transcription error:", err)
+      
+      // Check if it's a network error
+      const errorMessage = err.message || "Unknown error"
+      let userFriendlyMessage = "Transcription failed. Please try again."
+      
+      if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+        userFriendlyMessage = "Network error. Please check your internet connection and try again."
+      } else if (errorMessage.includes("unsupported") || errorMessage.includes("format")) {
+        userFriendlyMessage = "Audio format not supported. Please try MP3, WAV, or M4A format."
+      }
+      
+      setMessages(prev => [...prev, {
+        type: "shield",
+        result: {
+          riskLevel: "LOW",
+          summary: userFriendlyMessage,
+          redFlags: [],
+          flaggedPhrases: [],
+          advice: "Try recording with a clearer voice or upload a different audio file."
+        }
+      }])
+    } finally {
+      setIsProcessingAudio(false)
+      setLoading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
   }
 
+  // ─── Recording Logic ─────────────────────────────────────────────
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" })
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" })
+        if (blob.size < 1000) {
+          setMessages(prev => [...prev, {
+            type: "shield",
+            result: {
+              riskLevel: "LOW",
+              summary: "Recording was too short or silent. Please try again.",
+              redFlags: [],
+              flaggedPhrases: [],
+              advice: "Speak clearly for at least 3 seconds when recording."
+            }
+          }])
+          return
+        }
+        const file = new File([blob], `recording-${Date.now()}.webm`, { type: "audio/webm" })
+        await processAudioFile(file)
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+
+    } catch (err) {
+      console.error("Mic access error:", err)
+      alert("Please allow microphone access to record audio.")
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+    }
+    clearInterval(timerRef.current)
+    setIsRecording(false)
+  }
+
+  const handleMicToggle = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
+
+  // ─── Send Text ──────────────────────────────────────────────────
   async function handleSend(textOverride) {
     const userText = textOverride || input
-    
-    // Check if we have text OR an attachment before firing
     if (!userText.trim() && !attachment) return
 
-    // Build the user message visual (handle attachment name if no text)
-    const displayMessage = userText.trim() ? userText : `[Attached File: ${attachment.name}]`
-
+    const displayMessage = userText.trim() ? userText : `[Attached File: ${attachment?.name}]`
     setInput("")
-    setAttachment(null) // clear attachment after sending
-    setIsRecording(false) // ensure mic is off
+    const currentAttachment = attachment
+    setAttachment(null)
     
     setMessages(prev => [...prev, { type: "user", text: displayMessage }])
     setLoading(true)
     
     try {
-      // NOTE: Pass the attachment to your API if it exists alongside the text
-      const result = await analyzeScam(userText, attachment) 
+      const result = await analyzeScam(userText || "No text provided") 
       setMessages(prev => [...prev, { type: "shield", result }])
     } catch (err) {
       setMessages(prev => [...prev, {
         type: "shield",
         result: {
           riskLevel: "LOW",
-          summary: "Analysis failed. Please check your API key.",
+          summary: "Analysis failed. Please try again.",
           redFlags: [],
           flaggedPhrases: [],
-          advice: "Try again or check your internet connection."
+          advice: "Check your internet connection and try again."
         }
       }])
     } finally {
@@ -188,7 +384,14 @@ export default function Analyze() {
     }
   }
 
-  // The Multi-modal Input Pill
+  // ─── Format Recording Time ──────────────────────────────────────
+  const formatTime = (seconds) => {
+    const mins = String(Math.floor(seconds / 60)).padStart(2, "0")
+    const secs = String(seconds % 60).padStart(2, "0")
+    return `${mins}:${secs}`
+  }
+
+  // ─── The Multi-modal Input Pill ──────────────────────────────────
   const InputPill = (
     <div className="relative flex flex-col w-full bg-white/90 backdrop-blur-md border border-slate-200 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.1)] rounded-[32px] pt-2 pb-1.5 px-2 focus-within:bg-white focus-within:border-orange-300 focus-within:ring-4 focus-within:ring-orange-50 transition-all">
       
@@ -206,6 +409,22 @@ export default function Analyze() {
         </div>
       )}
 
+      {/* Recording Indicator */}
+      {isRecording && (
+        <div className="flex items-center gap-2 mx-4 mt-1 mb-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-semibold rounded-xl w-max border border-red-200 animate-pulse">
+          <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
+          Recording... {formatTime(recordingTime)}
+        </div>
+      )}
+
+      {/* Processing Indicator */}
+      {isProcessingAudio && (
+        <div className="flex items-center gap-2 mx-4 mt-1 mb-1 px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-semibold rounded-xl w-max border border-blue-200 animate-pulse">
+          <span className="w-2 h-2 bg-blue-500 rounded-full animate-spin" />
+          Transcribing audio with Whisper...
+        </div>
+      )}
+
       <div className="flex items-end gap-2 w-full">
         <textarea
           value={input}
@@ -219,13 +438,12 @@ export default function Analyze() {
         {/* Action Button Group */}
         <div className="flex items-center gap-1.5 mb-1 mr-1 flex-shrink-0">
           
-          {/* Hidden File Input */}
           <input 
             type="file" 
             ref={fileInputRef} 
             onChange={handleFileChange} 
             className="hidden" 
-            accept="image/*,audio/*" 
+            accept="audio/*,image/*" 
           />
           
           <button
@@ -243,14 +461,14 @@ export default function Analyze() {
                 ? 'text-red-500 bg-red-50 hover:bg-red-100 animate-pulse shadow-sm' 
                 : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
             }`}
-            title="Record audio"
+            title={isRecording ? "Stop recording" : "Record audio"}
           >
             {isRecording ? <Square className="w-4.5 h-4.5" fill="currentColor" /> : <Mic className="w-4.5 h-4.5" />}
           </button>
 
           <button
             onClick={() => handleSend()}
-            disabled={loading || (!input.trim() && !attachment && !isRecording)}
+            disabled={loading || isProcessingAudio || (!input.trim() && !attachment && !isRecording)}
             className="w-10 h-10 ml-1 rounded-full bg-[#ffab8a] hover:bg-orange-500 text-white flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send className="w-4 h-4 ml-0.5" />
@@ -264,7 +482,6 @@ export default function Analyze() {
     <div className="bg-[#fafafa] flex flex-col h-[calc(100vh-70px)] font-sans relative overflow-hidden">
       
       {messages.length === 0 ? (
-        /* ================= EMPTY STATE ================= */
         <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-4 -mt-10">
           <div className="w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center shadow-sm shadow-orange-100/50 mb-6">
             <Shield className="w-7 h-7 text-orange-600" />
@@ -295,8 +512,6 @@ export default function Analyze() {
           </div>
         </div>
       ) : (
-
-        /* ================= CHAT STATE ================= */
         <>
           <div className="absolute top-6 right-6 lg:right-10 z-20">
             <button

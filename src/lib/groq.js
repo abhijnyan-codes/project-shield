@@ -90,8 +90,8 @@ export async function transcribeAudio(audioFile) {
   const transcription = await groq.audio.transcriptions.create({
     file: audioFile,
     model: "whisper-large-v3",
-    language: "auto",  // ✅ Changed from "en" to "auto" for Hindi/Hinglish support
     response_format: "text",
+    
   })
   return transcription
 }
