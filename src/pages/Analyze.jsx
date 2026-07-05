@@ -31,6 +31,31 @@ function RiskBadge({ level }) {
   )
 }
 
+// ─── NEW: Scam DNA Match Card ──────────────────────────────────
+function DnaMatchCard({ dna }) {
+  if (!dna || !dna.campaignName) return null
+
+  const percentage = dna.matchPercentage || 0
+  const color = percentage > 80 ? "bg-red-500" : percentage > 50 ? "bg-amber-500" : "bg-blue-500"
+
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">🧬 Scam DNA Match</span>
+        <span className="text-xs font-bold text-slate-900">{percentage}% match</span>
+      </div>
+      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+        <div 
+          className={`h-full ${color} rounded-full transition-all duration-1000`} 
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <p className="text-sm font-semibold text-slate-800 mt-1">{dna.campaignName}</p>
+      <p className="text-xs text-slate-500 leading-relaxed">{dna.description}</p>
+    </div>
+  )
+}
+
 function ShieldMessage({ result }) {
   return (
     <div className="flex gap-4 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -42,6 +67,9 @@ function ShieldMessage({ result }) {
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Threat Intelligence</span>
           <RiskBadge level={result.riskLevel} />
         </div>
+
+        {/* 🧬 Scam DNA Match - Rendered here */}
+        {result.dnaMatch && <DnaMatchCard dna={result.dnaMatch} />}
 
         {result.riskLevel === "HIGH" && (
           <p className="text-red-600 font-bold text-sm bg-red-50 px-3 py-2.5 rounded-lg border border-red-100">

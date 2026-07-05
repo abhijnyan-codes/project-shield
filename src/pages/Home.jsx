@@ -13,7 +13,12 @@ import {
   Activity,
   MessageSquare,
   BarChart3,
-  ExternalLink
+  ExternalLink,
+  UserX,
+  FileText,
+  FilePen,
+  MapPin,
+  Layers
 } from "lucide-react"
 
 export default function Home() {
@@ -153,7 +158,6 @@ export default function Home() {
               <p className="text-2xl font-bold text-[var(--color-text)] font-sora">{stat.value}</p>
               <p className="text-xs font-semibold text-[var(--color-text)] mt-1">{stat.label}</p>
               <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{stat.sub}</p>
-              {/* Tooltip on hover */}
               <div className="hidden group-hover:block absolute -bottom-2 left-1/2 -translate-x-1/2 translate-y-full mt-2 p-2 bg-slate-800 text-white text-[10px] rounded-lg whitespace-nowrap z-10 shadow-lg">
                 {stat.detail}
               </div>
@@ -207,70 +211,138 @@ export default function Home() {
         </div>
 
         {/* ─── HOW IT WORKS ────────────────────────────────────────── */}
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8 md:p-10 shadow-sm">
-          <h2 className="font-display font-bold text-2xl text-[var(--color-text)] text-center mb-2">
-            How Project Shield Works
-          </h2>
-          <p className="text-[var(--color-muted)] text-center text-sm mb-8">
-            Three layers of protection to keep you safe from digital fraud.
-          </p>
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50/90 via-white to-white border border-blue-100/60 shadow-sm">
+          <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-200/30 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                title: "Analyze",
-                desc: "Paste a suspicious message or describe a call. AI scans for impersonation, urgency, and financial requests.",
-                icon: <Shield className="w-8 h-8" />,
-                link: "/analyze",
-                linkText: "Try it now →"
-              },
-              {
-                title: "Live Shield",
-                desc: "Turn on voice monitoring during calls. AI listens to your responses and alerts you in real-time.",
-                icon: <Phone className="w-8 h-8" />,
-                link: "/live-shield",
-                linkText: "Try it now →"
-              },
-              {
-                title: "Report & Map",
-                desc: "Download incident reports for law enforcement. See fraud networks mapped across India.",
-                icon: <BarChart3 className="w-8 h-8" />,
-                link: "/network",
-                linkText: "Explore →"
-              },
-            ].map((item, i) => (
-              <div 
-                key={i} 
-                className="relative flex flex-col items-center text-center bg-white rounded-xl p-6 border border-[var(--color-border)] shadow-sm hover:shadow-md transition-all duration-200"
-              >
-                {/* Icon Circle (lighter, centered) */}
-                <div className="w-20 h-20 rounded-full bg-orange-50 border-2 border-orange-200 flex items-center justify-center text-[var(--color-danger)] shadow-sm mb-4">
-                  {item.icon}
-                </div>
-
-                <h3 className="font-bold text-[var(--color-text)] text-lg">{item.title}</h3>
-                <p className="text-sm text-[var(--color-muted)] mt-2 leading-relaxed flex-1">
-                  {item.desc}
-                </p>
-                <Link
-                  to={item.link}
-                  className="mt-4 inline-flex items-center gap-1 px-4 py-2 bg-[var(--color-danger)] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition shadow-sm hover:shadow-md"
-                >
-                  {item.linkText}
-                </Link>
+          <div className="relative z-10 p-8 md:p-10">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50/80 border border-blue-200 flex items-center justify-center text-blue-600 shadow-sm">
+                <Layers className="w-7 h-7" />
               </div>
-            ))}
+              <div>
+                <h2 className="font-display font-bold text-2xl md:text-3xl text-[var(--color-text)]">
+                  How Project Shield Works
+                </h2>
+                <p className="text-sm text-[var(--color-muted)]">
+                  Three layers of protection to keep you safe from digital fraud.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {[
+                {
+                  icon: <Shield className="w-8 h-8 text-[var(--color-danger)]" />,
+                  title: "Analyze",
+                  desc: "Paste a suspicious message or describe a call. AI scans for impersonation, urgency, and financial requests.",
+                  link: "/analyze",
+                  linkText: "Try it now →"
+                },
+                {
+                  icon: <Phone className="w-8 h-8 text-[var(--color-danger)]" />,
+                  title: "Live Shield",
+                  desc: "Turn on voice monitoring during calls. AI listens to your responses and alerts you in real-time.",
+                  link: "/live-shield",
+                  linkText: "Try it now →"
+                },
+                {
+                  icon: <BarChart3 className="w-8 h-8 text-[var(--color-danger)]" />,
+                  title: "Report & Map",
+                  desc: "Download incident reports for law enforcement. See fraud networks mapped across India.",
+                  link: "/network",
+                  linkText: "Explore →"
+                },
+              ].map((item, i) => (
+                <div key={i} className="bg-white/80 backdrop-blur-sm border border-blue-100/60 rounded-xl p-6 text-center shadow-sm hover:shadow-md transition flex flex-col items-center">
+                  <div className="w-20 h-20 rounded-full bg-orange-50 border-2 border-orange-200 flex items-center justify-center text-[var(--color-danger)] shadow-sm mb-4">
+                    {item.icon}
+                  </div>
+                  <h3 className="font-bold text-lg text-[var(--color-text)]">{item.title}</h3>
+                  <p className="text-sm text-[var(--color-muted)] mt-2 leading-relaxed flex-1">
+                    {item.desc}
+                  </p>
+                  <Link
+                    to={item.link}
+                    className="mt-4 inline-flex items-center gap-1 px-4 py-2 bg-[var(--color-danger)] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition shadow-sm hover:shadow-md"
+                  >
+                    {item.linkText}
+                  </Link>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* ─── DATA SOURCES (CLICKABLE LINKS) ───────────────────── */}
+        {/* ─── CYBERSAFE SECTION — UPGRADED ────────────────────────── */}
+        <div className="relative mt-10 overflow-hidden rounded-2xl bg-gradient-to-br from-orange-50/90 via-white to-white border border-orange-100/60 shadow-sm">
+          <div className="absolute -top-20 -right-20 w-64 h-64 bg-orange-200/30 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-orange-100/20 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 p-8 md:p-10">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-orange-100/80 border border-orange-200 flex items-center justify-center text-[var(--color-danger)] shadow-sm">
+                  <UserX className="w-7 h-7" />
+                </div>
+                <div>
+                  <h2 className="font-display font-bold text-2xl md:text-3xl text-[var(--color-text)]">
+                    CyberSafe
+                  </h2>
+                  <p className="text-sm text-[var(--color-muted)]">
+                    Harassment & Bullying Support — Complete case management
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/cybersafe"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-danger)] text-white rounded-xl font-semibold hover:opacity-90 transition shadow-sm hover:shadow-md whitespace-nowrap"
+              >
+                Get Help Now
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {[
+                {
+                  icon: <FileText className="w-8 h-8 text-[var(--color-danger)]" />,
+                  title: "AI Case Summary",
+                  desc: "Get a structured report of what happened, who is involved, and the exact threat level assessed by our AI."
+                },
+                {
+                  icon: <FilePen className="w-8 h-8 text-[var(--color-danger)]" />,
+                  title: "Complaint Draft",
+                  desc: "Automatically generate a pre-filled complaint text for cybercrime.gov.in — just copy, paste, and submit."
+                },
+                {
+                  icon: <MapPin className="w-8 h-8 text-[var(--color-danger)]" />,
+                  title: "State Cybercell",
+                  desc: "Find your nearest cybercrime cell with direct contact details and file a formal complaint in person."
+                }
+              ].map((item, i) => (
+                <div key={i} className="bg-white/80 backdrop-blur-sm border border-orange-100/60 rounded-xl p-6 text-center shadow-sm hover:shadow-md transition flex flex-col items-center">
+                  <div className="w-16 h-16 rounded-full bg-orange-50 border-2 border-orange-200 flex items-center justify-center text-[var(--color-danger)] shadow-sm mb-4">
+                    {item.icon}
+                  </div>
+                  <h4 className="font-bold text-base text-[var(--color-text)]">{item.title}</h4>
+                  <p className="text-sm text-[var(--color-muted)] mt-2 leading-relaxed flex-1">
+                    {item.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ─── DATA SOURCES ────────────────────────────────────────── */}
         <div className="mt-10 p-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-muted)]">
             <ExternalLink className="w-3 h-3 flex-shrink-0" />
             <span className="font-semibold">Data Sources:</span>
             
             <a 
-              href="https://xn--i1b5bzbybhfo5c8b4bxh.xn--11b7cb3a6a.xn--h2brj9c/en#" 
+              href="https://www.mha.gov.in/sites/default/files/AnnualReport_2023_24.pdf" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-[var(--color-info)] hover:underline hover:text-[var(--color-danger)] transition"
