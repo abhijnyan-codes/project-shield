@@ -1,478 +1,548 @@
 import { useEffect, useRef, useState } from "react"
 import * as d3 from "d3"
-import { Shield, X } from "lucide-react"
+import { Shield, X, MapPin } from "lucide-react"
 
-// ─── Mock Data ──────────────────────────────────────────────────
+// ─── Complete State Data (All 36 States/UTs - NCRB 2023) ──────────────────────────────────────
+const stateData = [
+  // Union Territories
+  { id: "DL", name: "Delhi", cases: 5842, topScam: "Digital Arrest" },
+  { id: "PY", name: "Puducherry", cases: 127, topScam: "UPI Fraud" },
+  { id: "CH", name: "Chandigarh", cases: 234, topScam: "Investment Scam" },
+  { id: "AN", name: "Andaman and Nicobar Islands", cases: 18, topScam: "Lottery Scam" },
+  { id: "DN", name: "Dadra and Nagar Haveli and Daman and Diu", cases: 45, topScam: "KYC Fraud" },
+  { id: "JK", name: "Jammu and Kashmir", cases: 312, topScam: "Digital Arrest" },
+  { id: "LA", name: "Ladakh", cases: 12, topScam: "Job Fraud" },
+  { id: "LD", name: "Lakshadweep", cases: 3, topScam: "Romance Scam" },
+
+  // States - High Cybercrime
+  { id: "KA", name: "Karnataka", cases: 21889, topScam: "Cheating by Personation" },
+  { id: "TG", name: "Telangana", cases: 18236, topScam: "Investment Scam" },
+  { id: "UP", name: "Uttar Pradesh", cases: 10794, topScam: "Digital Arrest" },
+  { id: "MH", name: "Maharashtra", cases: 8103, topScam: "UPI Fraud" },
+  { id: "TN", name: "Tamil Nadu", cases: 4121, topScam: "Job Fraud" },
+  { id: "BR", name: "Bihar", cases: 4450, topScam: "Lottery Scam" },
+  { id: "KL", name: "Kerala", cases: 3295, topScam: "Romance Scam" },
+  { id: "RJ", name: "Rajasthan", cases: 2435, topScam: "KYC Fraud" },
+  { id: "OD", name: "Odisha", cases: 2348, topScam: "Loan Fraud" },
+  { id: "AP", name: "Andhra Pradesh", cases: 2341, topScam: "Investment Scam" },
+  { id: "GJ", name: "Gujarat", cases: 1995, topScam: "Digital Arrest" },
+  { id: "HR", name: "Haryana", cases: 751, topScam: "KYC Fraud" },
+  { id: "MP", name: "Madhya Pradesh", cases: 685, topScam: "UPI Fraud" },
+  { id: "PB", name: "Punjab", cases: 511, topScam: "Digital Arrest" },
+  { id: "WB", name: "West Bengal", cases: 309, topScam: "Investment Scam" },
+  
+  // States - Medium/Low Cybercrime
+  { id: "JH", name: "Jharkhand", cases: 287, topScam: "Job Fraud" },
+  { id: "AS", name: "Assam", cases: 264, topScam: "Lottery Scam" },
+  { id: "CT", name: "Chhattisgarh", cases: 243, topScam: "KYC Fraud" },
+  { id: "UK", name: "Uttarakhand", cases: 198, topScam: "Digital Arrest" },
+  { id: "HP", name: "Himachal Pradesh", cases: 176, topScam: "Investment Scam" },
+  { id: "GA", name: "Goa", cases: 142, topScam: "Romance Scam" },
+  { id: "TR", name: "Tripura", cases: 89, topScam: "UPI Fraud" },
+  { id: "MN", name: "Manipur", cases: 67, topScam: "Job Fraud" },
+  { id: "NL", name: "Nagaland", cases: 54, topScam: "Lottery Scam" },
+  { id: "MZ", name: "Mizoram", cases: 48, topScam: "Investment Scam" },
+  { id: "AR", name: "Arunachal Pradesh", cases: 42, topScam: "Digital Arrest" },
+  { id: "ML", name: "Meghalaya", cases: 38, topScam: "KYC Fraud" },
+  { id: "SK", name: "Sikkim", cases: 29, topScam: "Romance Scam" },
+]
+
+// ─── Name → ID mapping for fallback matching (All 36 States/UTs) ─────────────────────
+const NAME_TO_ID = {
+  // States
+  "Karnataka": "KA", "Telangana": "TG", "Uttar Pradesh": "UP",
+  "Maharashtra": "MH", "Tamil Nadu": "TN", "Kerala": "KL",
+  "Rajasthan": "RJ", "Odisha": "OD", "Andhra Pradesh": "AP",
+  "Gujarat": "GJ", "Bihar": "BR", "Haryana": "HR",
+  "Madhya Pradesh": "MP", "Punjab": "PB", "West Bengal": "WB",
+  "Jharkhand": "JH", "Assam": "AS", "Chhattisgarh": "CT",
+  "Uttarakhand": "UK", "Himachal Pradesh": "HP", "Goa": "GA",
+  "Tripura": "TR", "Manipur": "MN", "Nagaland": "NL",
+  "Mizoram": "MZ", "Arunachal Pradesh": "AR", "Meghalaya": "ML",
+  "Sikkim": "SK",
+  
+  // Union Territories
+  "Delhi": "DL", "Puducherry": "PY", "Chandigarh": "CH",
+  "Andaman and Nicobar Islands": "AN", "Dadra and Nagar Haveli and Daman and Diu": "DN",
+  "Jammu and Kashmir": "JK", "Ladakh": "LA", "Lakshadweep": "LD",
+  
+  // Alternate names
+  "Andhra": "AP", "Orissa": "OD", "Uttaranchal": "UK",
+  "Daman and Diu": "DN", "Dadra and Nagar Haveli": "DN",
+  "Pondicherry": "PY",
+}
+
+// ─── Top Stats ──────────────────────────────────────────────────
+const topStats = [
+  { label: "Total Cybercrime Cases 2023", value: "86,420", source: "NCRB Crime in India 2023", color: "text-red-500" },
+  { label: "Highest Crime State", value: "Karnataka", source: "21,889 cases (NCRB)", color: "text-orange-500" },
+  { label: "Most Common Scam Type", value: "Fraud (Cheating)", source: "19,466 cases (22.5%)", color: "text-amber-500" },
+  { label: "Money Lost to Cyber Fraud 2024", value: "₹22,845 Cr", source: "MHA Lok Sabha Dec 2025", color: "text-blue-500" },
+]
+
+// ─── Mock Network Data ──────────────────────────────────────────
 const mockData = {
   nodes: [
-    // Scammers (red)
-    { id: "s1", type: "scammer", label: "Scammer A", phone: "+91 98765 43210" },
-    { id: "s2", type: "scammer", label: "Scammer B", phone: "+91 87654 32109" },
-    { id: "s3", type: "scammer", label: "Scammer C", phone: "+91 76543 21098" },
-    { id: "s4", type: "scammer", label: "Scammer D", phone: "+91 65432 10987" },
-    // Mules (amber)
-    { id: "m1", type: "mule", label: "Mule Account 1", account: "XXXX1234" },
-    { id: "m2", type: "mule", label: "Mule Account 2", account: "XXXX5678" },
-    { id: "m3", type: "mule", label: "Mule Account 3", account: "XXXX9012" },
-    { id: "m4", type: "mule", label: "Mule Account 4", account: "XXXX3456" },
-    { id: "m5", type: "mule", label: "Mule Account 5", account: "XXXX7890" },
-    { id: "m6", type: "mule", label: "Mule Account 6", account: "XXXX2345" },
-    // Victims (blue)
-    { id: "v1", type: "victim", label: "Victim A", location: "Mumbai" },
-    { id: "v2", type: "victim", label: "Victim B", location: "Delhi" },
-    { id: "v3", type: "victim", label: "Victim C", location: "Bangalore" },
-    { id: "v4", type: "victim", label: "Victim D", location: "Chennai" },
-    { id: "v5", type: "victim", label: "Victim E", location: "Hyderabad" },
-    { id: "v6", type: "victim", label: "Victim F", location: "Kolkata" },
-    { id: "v7", type: "victim", label: "Victim G", location: "Pune" },
-    { id: "v8", type: "victim", label: "Victim H", location: "Ahmedabad" },
-    { id: "v9", type: "victim", label: "Victim I", location: "Jaipur" },
-    { id: "v10", type: "victim", label: "Victim J", location: "Lucknow" },
+    { id: "s1", type: "scammer", label: "Scammer Network A", location: "Cambodia/Myanmar" },
+    { id: "s2", type: "scammer", label: "Scammer Network B", location: "Laos SEZ" },
+    { id: "s3", type: "scammer", label: "Digital Arrest Ring", location: "Dubai-UAE" },
+    { id: "s4", type: "scammer", label: "Investment Scam Hub", location: "Thailand" },
+    { id: "m1", type: "mule", label: "Mule Cluster 1", account: "Shell Company Network" },
+    { id: "m2", type: "mule", label: "Mule Cluster 2", account: "Payment Gateway Abuse" },
+    { id: "m3", type: "mule", label: "Mule Cluster 3", account: "Crypto-Hawala Route" },
+    { id: "m4", type: "mule", label: "Mule Cluster 4", account: "Merchant Category Fraud" },
+    { id: "m5", type: "mule", label: "Mule Cluster 5", account: "Layer-1 Mule Network" },
+    { id: "m6", type: "mule", label: "Mule Cluster 6", account: "Crypto Exchange Route" },
+    { id: "v1", type: "victim", label: "Victim Group A", location: "Mumbai, MH" },
+    { id: "v2", type: "victim", label: "Victim Group B", location: "Delhi" },
+    { id: "v3", type: "victim", label: "Victim Group C", location: "Bangalore, KA" },
+    { id: "v4", type: "victim", label: "Victim Group D", location: "Chennai, TN" },
+    { id: "v5", type: "victim", label: "Victim Group E", location: "Hyderabad, TG" },
+    { id: "v6", type: "victim", label: "Victim Group F", location: "Kolkata, WB" },
+    { id: "v7", type: "victim", label: "Victim Group G", location: "Pune, MH" },
+    { id: "v8", type: "victim", label: "Victim Group H", location: "Ahmedabad, GJ" },
+    { id: "v9", type: "victim", label: "Victim Group I", location: "Jaipur, RJ" },
+    { id: "v10", type: "victim", label: "Victim Group J", location: "Lucknow, UP" },
   ],
   links: [
-    { source: "s1", target: "m1" },
-    { source: "s1", target: "m2" },
-    { source: "s2", target: "m3" },
-    { source: "s3", target: "m4" },
-    { source: "s3", target: "m5" },
-    { source: "s4", target: "m6" },
-    { source: "m1", target: "v1" },
-    { source: "m1", target: "v2" },
-    { source: "m2", target: "v3" },
-    { source: "m2", target: "v4" },
-    { source: "m3", target: "v5" },
-    { source: "m3", target: "v6" },
-    { source: "m4", target: "v7" },
-    { source: "m4", target: "v8" },
-    { source: "m5", target: "v9" },
-    { source: "m5", target: "v10" },
-    { source: "m6", target: "v1" },
-    { source: "m6", target: "v3" },
-    { source: "s2", target: "m5" },
-    { source: "s4", target: "m2" },
+    { source: "s1", target: "m1" }, { source: "s1", target: "m2" }, { source: "s1", target: "m6" },
+    { source: "s2", target: "m3" }, { source: "s2", target: "m5" },
+    { source: "s3", target: "m4" }, { source: "s3", target: "m5" }, { source: "s3", target: "m1" },
+    { source: "s4", target: "m6" }, { source: "s4", target: "m2" }, { source: "s4", target: "m3" },
+    { source: "m1", target: "v1" }, { source: "m1", target: "v2" }, { source: "m1", target: "v7" },
+    { source: "m2", target: "v3" }, { source: "m2", target: "v4" }, { source: "m2", target: "v8" },
+    { source: "m3", target: "v5" }, { source: "m3", target: "v6" },
+    { source: "m4", target: "v7" }, { source: "m4", target: "v8" }, { source: "m4", target: "v9" },
+    { source: "m5", target: "v9" }, { source: "m5", target: "v10" }, { source: "m5", target: "v1" },
+    { source: "m6", target: "v1" }, { source: "m6", target: "v3" }, { source: "m6", target: "v5" },
+    { source: "m1", target: "m3" }, { source: "m2", target: "m6" }, { source: "m4", target: "m5" },
   ],
 }
 
-// ─── Campaign Data ─────────────────────────────────────────────
+// ─── Campaigns ──────────────────────────────────────────────────
 const campaigns = [
-  {
-    id: "campaign1",
-    name: "Digital Arrest Network",
-    nodes: ["s1", "s2", "m1", "m2", "m3", "v1", "v2", "v3", "v4", "v5"],
-    color: "#E8431A",
-    description: "CBI/ED impersonation scams targeting senior citizens",
-  },
-  {
-    id: "campaign2",
-    name: "FedEx Parcel Ring",
-    nodes: ["s3", "m4", "m5", "v6", "v7", "v8", "v9"],
-    color: "#E8A317",
-    description: "Customs clearance fraud with fake parcel notifications",
-  },
-  {
-    id: "campaign3",
-    name: "UPI Refund Scam",
-    nodes: ["s4", "m6", "v1", "v3", "v10"],
-    color: "#2D6BE4",
-    description: "Fake bank representatives tricking victims into sending money",
-  },
+  { id: "c1", name: "Digital Arrest Network", nodes: ["s1","s3","m1","m2","m4","v1","v2","v7","v10"], color: "#E8431A", description: "CBI/ED/Bank impersonation — 31.2% rise in 2023 (NCRB)" },
+  { id: "c2", name: "Investment/Ponzi Scam Ring", nodes: ["s2","s4","m3","m5","m6","v3","v5","v6"], color: "#E8A317", description: "OctaFX, Mahadev App — ₹34,855 Cr identified (ED Feb 2026)" },
+  { id: "c3", name: "UPI & Payment Gateway Fraud", nodes: ["s1","s2","m1","m2","v4","v8","v9"], color: "#2D6BE4", description: "Merchant category fraud — ₹1,776 Cr (Jan–Sep 2024)" },
 ]
 
-export default function NetworkMap() {
-  const svgRef = useRef(null)
-  const containerRef = useRef(null)
-  const [selectedNode, setSelectedNode] = useState(null)
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+// ─── Helpers ────────────────────────────────────────────────────
+const MAX_CASES = Math.max(...stateData.map(s => s.cases))
 
-  // ─── Responsive sizing ──────────────────────────────────────────
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect()
-        setDimensions({
-          width: rect.width || 800,
-          height: Math.max(400, window.innerHeight - 300),
-        })
-      }
+function getColor(cases) {
+  if (!cases) return "#e2e8f0"
+  const intensity = cases / MAX_CASES
+  if (intensity > 0.8) return "#7f1d1d"
+  if (intensity > 0.6) return "#b91c1c"
+  if (intensity > 0.4) return "#ef4444"
+  if (intensity > 0.2) return "#fca5a5"
+  return "#fee2e2"
+}
+
+// ─── Improved getStateName with more property keys ──────────────
+function getStateName(properties) {
+  if (!properties) return ""
+  
+  const keys = [
+    "NAME_1", "name", "ST_NM", "STATE", "statename", "state", "NAME",
+    "district", "ENGTYPE_1", "NL_NAME_1", "VARNAME_1", "id",
+  ]
+  
+  for (const key of keys) {
+    if (properties[key] && typeof properties[key] === "string" && properties[key].trim()) {
+      return properties[key].trim()
     }
+  }
+  
+  return ""
+}
 
-    updateDimensions()
-    window.addEventListener("resize", updateDimensions)
-    return () => window.removeEventListener("resize", updateDimensions)
-  }, [])
+// ─── Robust state matching ──────────────────────────────────────
+function findStateData(properties) {
+  if (!properties) return null
 
-  // ─── D3 Graph ───────────────────────────────────────────────────
+  const rawName = getStateName(properties)
+  if (!rawName) return null
+  
+  const cleanName = rawName.trim()
+  const lowerName = cleanName.toLowerCase()
+
+  let found = stateData.find(s => s.name === cleanName)
+  if (found) return found
+
+  found = stateData.find(s => s.name.toLowerCase() === lowerName)
+  if (found) return found
+
+  const code = properties.ST_CODE || properties.state_code || properties.code || ""
+  if (code) {
+    const upperCode = code.toUpperCase().trim()
+    found = stateData.find(s => s.id === upperCode)
+    if (found) return found
+  }
+
+  for (const s of stateData) {
+    const sLower = s.name.toLowerCase()
+    if (lowerName.includes(sLower) || sLower.includes(lowerName)) {
+      return s
+    }
+  }
+
+  for (const [key, value] of Object.entries(NAME_TO_ID)) {
+    const keyLower = key.toLowerCase()
+    if (lowerName.includes(keyLower) || keyLower.includes(lowerName)) {
+      return stateData.find(s => s.id === value)
+    }
+  }
+
+  const cleaned = cleanName
+    .replace(/^(State of|Union Territory of|UT of)\s*/i, "")
+    .replace(/\s*(State|UT|Union Territory)$/i, "")
+    .trim()
+  
+  if (cleaned !== cleanName) {
+    return findStateData({ ...properties, name: cleaned })
+  }
+
+  return null
+}
+
+// ─── India Map Component ──────────────────────────────────────
+function IndiaMap({ onStateClick, selectedState }) {
+  const svgRef = useRef(null)
+  const [tooltip, setTooltip] = useState(null)
+  const [mapError, setMapError] = useState(false)
+
   useEffect(() => {
-    if (!svgRef.current || dimensions.width === 0) return
+    const svgEl = svgRef.current
+    if (!svgEl) return
 
-    const { width, height } = dimensions
-    const margin = { top: 20, right: 20, bottom: 20, left: 20 }
-    const innerWidth = width - margin.left - margin.right
-    const innerHeight = height - margin.top - margin.bottom
+    const width = svgEl.parentElement?.clientWidth || 700
+    const height = 520
 
-    d3.select(svgRef.current).selectAll("*").remove()
-
-    const svg = d3
-      .select(svgRef.current)
+    d3.select(svgEl).selectAll("*").remove()
+    d3.select(svgEl)
       .attr("width", width)
       .attr("height", height)
-      .append("g")
-      .attr("transform", `translate(${margin.left},${margin.top})`)
 
-    // ─── Color mapping ─────────────────────────────────────────────
-    const colorMap = {
-      scammer: "#E8431A",
-      mule: "#E8A317",
-      victim: "#2D6BE4",
-    }
+    const projection = d3.geoMercator()
+      .center([82, 23])
+      .scale(Math.min(width, height) * 1.3)
+      .translate([width / 2, height / 2])
 
-    const sizeMap = {
-      scammer: 14,
-      mule: 10,
-      victim: 8,
-    }
+    const path = d3.geoPath().projection(projection)
+    const svg = d3.select(svgEl)
 
-    // ─── Simulation ───────────────────────────────────────────────
-    const simulation = d3
-      .forceSimulation(mockData.nodes)
-      .force(
-        "link",
-        d3
-          .forceLink(mockData.links)
-          .id((d) => d.id)
-          .distance(100)
-      )
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(innerWidth / 2, innerHeight / 2))
-      .force("collision", d3.forceCollide().radius(20))
+    const GEO_URL = "/india-states.geo.json"
 
-    // ─── Links ─────────────────────────────────────────────────────
-    const link = svg
-      .append("g")
-      .selectAll("line")
-      .data(mockData.links)
-      .enter()
-      .append("line")
-      .attr("stroke", "#CBD5E1")
-      .attr("stroke-width", 1.5)
-      .attr("stroke-opacity", 0.6)
+    d3.json(GEO_URL)
+      .then(data => {
+        if (!data?.features?.length) {
+          console.error("No features found in GeoJSON")
+          setMapError(true)
+          return
+        }
 
-    // ─── Nodes ─────────────────────────────────────────────────────
-    const node = svg
-      .append("g")
-      .selectAll("circle")
-      .data(mockData.nodes)
-      .enter()
-      .append("circle")
-      .attr("r", (d) => sizeMap[d.type] || 8)
-      .attr("fill", (d) => colorMap[d.type] || "#94A3B8")
-      .attr("stroke", "#FFFFFF")
-      .attr("stroke-width", 2)
-      .attr("cursor", "pointer")
-      .on("click", (event, d) => {
-        setSelectedNode(d)
+        console.log("Sample GeoJSON properties:", data.features[0].properties)
+        console.log("Available state names:", stateData.map(s => s.name))
+
+        svg.selectAll("path")
+          .data(data.features)
+          .enter()
+          .append("path")
+          .attr("d", path)
+          .attr("fill", d => {
+            const matched = findStateData(d.properties)
+            return getColor(matched?.cases)
+          })
+          .attr("stroke", "#ffffff")
+          .attr("stroke-width", 0.8)
+          .attr("cursor", "pointer")
+          .on("mouseover", function(event, d) {
+            d3.select(this).attr("stroke-width", 2).attr("stroke", "#1e293b")
+            const matched = findStateData(d.properties)
+            const name = getStateName(d.properties) || "Unknown"
+            const rect = svgEl.getBoundingClientRect()
+            setTooltip({
+              name,
+              state: matched,
+              x: event.clientX - rect.left,
+              y: event.clientY - rect.top
+            })
+          })
+          .on("mousemove", function(event) {
+            const rect = svgEl.getBoundingClientRect()
+            setTooltip(prev => prev ? {
+              ...prev,
+              x: event.clientX - rect.left,
+              y: event.clientY - rect.top
+            } : null)
+          })
+          .on("mouseout", function() {
+            d3.select(this).attr("stroke-width", 0.8).attr("stroke", "#ffffff")
+            setTooltip(null)
+          })
+          .on("click", (event, d) => {
+            const matched = findStateData(d.properties)
+            if (matched) onStateClick(matched)
+          })
       })
-      .on("mouseenter", function () {
-        d3.select(this).attr("stroke-width", 4)
+      .catch((err) => {
+        console.error("Map load error:", err)
+        setMapError(true)
       })
-      .on("mouseleave", function () {
-        d3.select(this).attr("stroke-width", 2)
-      })
+  }, [onStateClick])
 
-    // ─── Labels ────────────────────────────────────────────────────
-    const label = svg
-      .append("g")
-      .selectAll("text")
-      .data(mockData.nodes)
-      .enter()
-      .append("text")
-      .text((d) => d.label)
-      .attr("font-size", "8px")
-      .attr("fill", "#1A1A18") // ✅ Light mode text color
-      .attr("text-anchor", "middle")
-      .attr("dy", -12)
-      .attr("font-weight", 500)
-
-    // ─── Tooltips ──────────────────────────────────────────────────
-    const tooltip = d3
-      .select("body")
-      .append("div")
-      .style("position", "absolute")
-      .style("background", "white")
-      .style("border", "1px solid #E8E4DE")
-      .style("border-radius", "8px")
-      .style("padding", "8px 12px")
-      .style("font-size", "11px")
-      .style("box-shadow", "0 4px 12px rgba(0,0,0,0.1)")
-      .style("pointer-events", "none")
-      .style("opacity", 0)
-      .style("transition", "opacity 0.2s")
-      .style("z-index", 100)
-      .style("color", "#1A1A18")
-
-    node
-      .on("mouseenter", (event, d) => {
-        tooltip
-          .style("opacity", 1)
-          .html(
-            `<strong>${d.label}</strong><br/>Type: ${
-              d.type.charAt(0).toUpperCase() + d.type.slice(1)
-            }<br/>${d.phone ? `Phone: ${d.phone}` : ""}${
-              d.account ? `Account: ${d.account}` : ""
-            }${d.location ? `Location: ${d.location}` : ""}`
-          )
-          .style("left", event.pageX + 12 + "px")
-          .style("top", event.pageY - 10 + "px")
-      })
-      .on("mouseleave", () => {
-        tooltip.style("opacity", 0)
-      })
-
-    // ─── Update positions ─────────────────────────────────────────
-    simulation.on("tick", () => {
-      link
-        .attr("x1", (d) => d.source.x)
-        .attr("y1", (d) => d.source.y)
-        .attr("x2", (d) => d.target.x)
-        .attr("y2", (d) => d.target.y)
-
-      node
-        .attr("cx", (d) => {
-          const x = Math.max(10, Math.min(innerWidth - 10, d.x))
-          d.x = x
-          return x
-        })
-        .attr("cy", (d) => {
-          const y = Math.max(10, Math.min(innerHeight - 10, d.y))
-          d.y = y
-          return y
-        })
-
-      label
-        .attr("x", (d) => d.x)
-        .attr("y", (d) => d.y - 14)
-    })
-
-    // ─── Zoom ──────────────────────────────────────────────────────
-    const zoom = d3
-      .zoom()
-      .scaleExtent([0.5, 2])
-      .on("zoom", (event) => {
-        svg.attr("transform", event.transform)
-      })
-
-    d3.select(svgRef.current).call(zoom)
-
-    return () => {
-      simulation.stop()
-      tooltip.remove()
-    }
-  }, [dimensions])
-
-  // ─── Node Detail Sidebar ────────────────────────────────────────
-  const NodeDetailPanel = ({ node, onClose }) => {
-    if (!node) return null
-
-    const typeLabels = {
-      scammer: "🔴 Scammer",
-      mule: "🟡 Mule Account",
-      victim: "🔵 Victim",
-    }
-
-    return (
-      <div className="fixed right-0 top-0 h-full w-80 bg-white border-l border-[var(--color-border)] shadow-xl p-6 overflow-y-auto z-50 animate-in slide-in-from-right duration-300">
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="font-display font-bold text-lg text-[var(--color-text)]">
-            Node Details
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-[var(--color-bg)] rounded-lg transition"
-          >
-            <X className="w-5 h-5 text-[var(--color-muted)]" />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <p className="text-xs text-[var(--color-muted)] uppercase tracking-wider font-semibold">
-              Label
-            </p>
-            <p className="text-sm font-semibold text-[var(--color-text)]">{node.label}</p>
-          </div>
-
-          <div>
-            <p className="text-xs text-[var(--color-muted)] uppercase tracking-wider font-semibold">
-              Type
-            </p>
-            <p className="text-sm text-[var(--color-text)]">{typeLabels[node.type] || node.type}</p>
-          </div>
-
-          {node.phone && (
-            <div>
-              <p className="text-xs text-[var(--color-muted)] uppercase tracking-wider font-semibold">
-                Phone
-              </p>
-              <p className="text-sm font-mono text-[var(--color-text)]">{node.phone}</p>
-            </div>
-          )}
-
-          {node.account && (
-            <div>
-              <p className="text-xs text-[var(--color-muted)] uppercase tracking-wider font-semibold">
-                Account
-              </p>
-              <p className="text-sm font-mono text-[var(--color-text)]">{node.account}</p>
-            </div>
-          )}
-
-          {node.location && (
-            <div>
-              <p className="text-xs text-[var(--color-muted)] uppercase tracking-wider font-semibold">
-                Location
-              </p>
-              <p className="text-sm text-[var(--color-text)]">{node.location}</p>
-            </div>
-          )}
-
-          <div className="pt-4 border-t border-[var(--color-border)]">
-            <p className="text-xs text-[var(--color-muted)] uppercase tracking-wider font-semibold">
-              Connected Nodes
-            </p>
-            <p className="text-sm text-[var(--color-text)]">
-              {mockData.links.filter(
-                (l) => l.source.id === node.id || l.target.id === node.id
-              ).length || 0}{" "}
-              connections
-            </p>
-          </div>
-
-          <button
-            onClick={() => {
-              const report = {
-                node: node.label,
-                type: node.type,
-                ...(node.phone && { phone: node.phone }),
-                ...(node.account && { account: node.account }),
-                ...(node.location && { location: node.location }),
-                timestamp: new Date().toISOString(),
-              }
-              const blob = new Blob([JSON.stringify(report, null, 2)], {
-                type: "application/json",
-              })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement("a")
-              a.href = url
-              a.download = `intel-${node.id}-${Date.now()}.json`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-            className="w-full mt-4 px-4 py-2 bg-[var(--color-text)] text-white text-xs font-semibold rounded-xl hover:opacity-90 transition"
-          >
-            Export Intelligence
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── Counts ──────────────────────────────────────────────────────
-  const counts = {
-    scammer: mockData.nodes.filter((n) => n.type === "scammer").length,
-    mule: mockData.nodes.filter((n) => n.type === "mule").length,
-    victim: mockData.nodes.filter((n) => n.type === "victim").length,
-  }
+  if (mapError) return (
+    <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+      Map failed to load. Check console for details.
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)]">
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* ─── Header ───────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-display font-bold text-[var(--color-text)]">
-              Network Map
-            </h1>
-            <p className="text-[var(--color-muted)] text-sm">
-              Detected Campaign: Digital Arrest Network —{" "}
-              <span className="text-[var(--color-text)] font-semibold">
-                {mockData.nodes.length} nodes identified
-              </span>
-            </p>
-          </div>
+    <div className="relative w-full">
+      <svg ref={svgRef} className="w-full" />
+      {tooltip && (
+        <div
+          className="absolute bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 text-xs pointer-events-none z-10"
+          style={{ left: tooltip.x + 12, top: tooltip.y - 10 }}
+        >
+          <p className="font-bold text-slate-900">{tooltip.name || "Unknown"}</p>
+          {tooltip.state ? (
+            <>
+              <p className="text-slate-500 mt-0.5">{tooltip.state.cases.toLocaleString("en-IN")} cases</p>
+              <p className="text-slate-500">Top: {tooltip.state.topScam}</p>
+            </>
+          ) : (
+            <p className="text-slate-400">No data available</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
-          <div className="flex items-center gap-4 text-xs text-[var(--color-text)] font-medium">
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-[#E8431A]" />
-              Scammer ({counts.scammer})
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-[#E8A317]" />
-              Mule ({counts.mule})
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-[#2D6BE4]" />
-              Victim ({counts.victim})
-            </span>
-          </div>
+// ─── Network Graph Component ──────────────────────────────────
+function NetworkGraph({ onNodeClick }) {
+  const svgRef = useRef(null)
+  const containerRef = useRef(null)
+  const [dimensions, setDimensions] = useState({ width: 800, height: 450 })
+
+  useEffect(() => {
+    const update = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setDimensions({ width: rect.width || 800, height: 450 })
+      }
+    }
+    update()
+    window.addEventListener("resize", update)
+    return () => window.removeEventListener("resize", update)
+  }, [])
+
+  useEffect(() => {
+    if (!svgRef.current || dimensions.width === 0) return
+    const { width, height } = dimensions
+    d3.select(svgRef.current).selectAll("*").remove()
+
+    const svg = d3.select(svgRef.current)
+      .attr("width", width).attr("height", height)
+      .append("g")
+
+    const colorMap = { scammer: "#E8431A", mule: "#E8A317", victim: "#2D6BE4" }
+    const sizeMap = { scammer: 16, mule: 11, victim: 8 }
+
+    const nodes = mockData.nodes.map(d => ({ ...d }))
+    const links = mockData.links.map(d => ({ ...d }))
+
+    const simulation = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id(d => d.id).distance(70))
+      .force("charge", d3.forceManyBody().strength(-180))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collision", d3.forceCollide().radius(22))
+
+    const link = svg.append("g").selectAll("line")
+      .data(links).enter().append("line")
+      .attr("stroke", "#CBD5E1").attr("stroke-width", 1.5).attr("stroke-opacity", 0.6)
+
+    const node = svg.append("g").selectAll("circle")
+      .data(nodes).enter().append("circle")
+      .attr("r", d => sizeMap[d.type] || 8)
+      .attr("fill", d => colorMap[d.type] || "#94A3B8")
+      .attr("stroke", "#FFFFFF").attr("stroke-width", 2)
+      .attr("cursor", "pointer")
+      .on("click", (event, d) => onNodeClick(d))
+      .on("mouseenter", function() { d3.select(this).attr("stroke-width", 4) })
+      .on("mouseleave", function() { d3.select(this).attr("stroke-width", 2) })
+
+    const label = svg.append("g").selectAll("text")
+      .data(nodes).enter().append("text")
+      .text(d => d.label)
+      .attr("font-size", "7.5px").attr("fill", "#334155")
+      .attr("text-anchor", "middle").attr("dy", -14).attr("font-weight", 500)
+
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x).attr("y2", d => d.target.y)
+      node
+        .attr("cx", d => { d.x = Math.max(14, Math.min(width - 14, d.x)); return d.x })
+        .attr("cy", d => { d.y = Math.max(14, Math.min(height - 14, d.y)); return d.y })
+      label.attr("x", d => d.x).attr("y", d => d.y - 16)
+    })
+
+    const zoom = d3.zoom().scaleExtent([0.4, 3])
+      .on("zoom", (event) => svg.attr("transform", event.transform))
+    d3.select(svgRef.current).call(zoom)
+
+    return () => simulation.stop()
+  }, [dimensions, onNodeClick])
+
+  return (
+    <div ref={containerRef} className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm relative" style={{ height: 450 }}>
+      <svg ref={svgRef} className="w-full h-full" />
+      <div className="absolute bottom-4 right-4 text-[10px] text-slate-400 bg-white/80 px-3 py-1.5 rounded-full border border-slate-100">
+        🔒 ED/CBI Intelligence · Scroll to zoom
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ──────────────────────────────────────────────────
+export default function NetworkMap() {
+  const [selectedState, setSelectedState] = useState(null)
+  const [selectedNode, setSelectedNode] = useState(null)
+
+  return (
+    <div className="min-h-screen bg-[#fafafa]">
+      <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col gap-8">
+
+        <div>
+          <h1 className="font-display font-bold text-3xl text-slate-900">Crime Intelligence Map</h1>
+          <p className="text-slate-500 text-sm mt-1">NCRB 2023 + MHA/ED 2024–26 — real cybercrime patterns across India</p>
         </div>
 
-        {/* ─── Campaign Cards ──────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-3 mb-4">
-          {campaigns.map((campaign) => (
-            <div
-              key={campaign.id}
-              className="bg-white border border-[var(--color-border)] rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm"
-            >
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ background: campaign.color }}
-              />
-              <div>
-                <p className="text-xs font-semibold text-[var(--color-text)]">
-                  {campaign.name}
-                </p>
-                <p className="text-[10px] text-[var(--color-muted)]">
-                  {campaign.nodes.length} nodes · {campaign.description}
-                </p>
-              </div>
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {topStats.map((stat, i) => (
+            <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+              <p className={`font-display font-extrabold text-xl ${stat.color}`}>{stat.value}</p>
+              <p className="text-xs font-semibold text-slate-700 mt-1">{stat.label}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{stat.source}</p>
             </div>
           ))}
         </div>
 
-        {/* ─── Graph Container ─────────────────────────────────────── */}
-        <div
-          ref={containerRef}
-          className="bg-white border border-[var(--color-border)] rounded-2xl overflow-hidden relative shadow-sm"
-          style={{ height: dimensions.height }}
-        >
-          <svg ref={svgRef} className="w-full h-full" />
+        {/* India Map */}
+        <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-display font-bold text-xl text-slate-900">India Cybercrime Heatmap</h2>
+              <p className="text-xs text-slate-500 mt-1">NCRB 2023 — hover or click any state for details</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              {[["bg-red-100", "Low"], ["bg-red-400", "Medium"], ["bg-red-900", "High"]].map(([bg, label]) => (
+                <span key={label} className="flex items-center gap-1.5">
+                  <span className={`w-3 h-3 rounded ${bg}`} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
 
-          {/* Trust Badge */}
-          <div className="absolute bottom-4 right-4 text-[10px] text-[var(--color-muted)] bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-[var(--color-border)] shadow-sm">
-            🔒 Encrypted Intelligence
+          <IndiaMap onStateClick={setSelectedState} selectedState={selectedState} />
+
+          {selectedState && (
+            <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: getColor(selectedState.cases) }}>
+                  <MapPin className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900">{selectedState.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{selectedState.cases.toLocaleString("en-IN")} reported cases in 2023</p>
+                  <p className="text-xs text-slate-600 mt-1"><span className="font-semibold">Top scam:</span> {selectedState.topScam}</p>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs text-slate-400">Risk Level</p>
+                <p className="text-sm font-bold text-red-500 mt-0.5">
+                  {selectedState.cases > 10000 ? "Critical" : selectedState.cases > 7000 ? "High" : selectedState.cases > 4000 ? "Medium" : "Low"}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Network Graph */}
+        <div>
+          <div className="mb-4">
+            <h2 className="font-display font-bold text-xl text-slate-900">Fraud Network Graph</h2>
+            <p className="text-xs text-slate-500 mt-1">ED Operation Mule Hunt 2.0 — scammers, mule accounts, and victims (₹34,855 Cr identified)</p>
+          </div>
+
+          <div className="flex flex-wrap gap-3 mb-4">
+            {campaigns.map(c => (
+              <div key={c.id} className="bg-white border border-slate-100 rounded-xl px-4 py-2 flex items-center gap-2 shadow-sm">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">{c.name}</p>
+                  <p className="text-[10px] text-slate-400">{c.nodes.length} nodes · {c.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <NetworkGraph onNodeClick={setSelectedNode} />
+
+          <div className="flex items-center gap-6 mt-3 text-xs text-slate-500 flex-wrap">
+            {[["#E8431A", "Scammer (SE Asia/Dubai)"], ["#E8A317", "Mule Account (Shell Cos.)"], ["#2D6BE4", "Victim (22.68L complaints)"]].map(([color, label]) => (
+              <span key={label} className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                {label}
+              </span>
+            ))}
+            <span className="ml-auto text-[10px]">Data: MHA/I4C, ED, NCRB 2023–26</span>
           </div>
         </div>
 
-        {/* ─── Footer Stats ────────────────────────────────────────── */}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-muted)]">
-          <div className="flex items-center gap-4">
-            <span>Last updated: just now</span>
-            <span className="w-1 h-1 rounded-full bg-[var(--color-border)]" />
-            <span>Data source: Project Shield Intelligence</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Shield className="w-3 h-3 text-[var(--color-danger)]" />
-            <span>Click any node for intelligence details</span>
-          </div>
-        </div>
       </div>
 
-      {/* ─── Node Detail Sidebar ──────────────────────────────────── */}
+      {/* Node Sidebar */}
       {selectedNode && (
-        <NodeDetailPanel
-          node={selectedNode}
-          onClose={() => setSelectedNode(null)}
-        />
+        <div className="fixed right-0 top-0 h-full w-72 bg-white border-l border-slate-100 shadow-xl p-6 overflow-y-auto z-50">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="font-display font-bold text-lg text-slate-900">Node Details</h3>
+            <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-slate-100 rounded-lg">
+              <X className="w-5 h-5 text-slate-400" />
+            </button>
+          </div>
+          <div className="space-y-3 text-sm">
+            <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">Label</p><p className="font-semibold text-slate-900">{selectedNode.label}</p></div>
+            <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">Type</p><p className="text-slate-700 capitalize">{selectedNode.type}</p></div>
+            {selectedNode.location && <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">Location</p><p className="text-slate-700">{selectedNode.location}</p></div>}
+            {selectedNode.account && <div><p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">Account Type</p><p className="font-mono text-slate-700">{selectedNode.account}</p></div>}
+            <div className="pt-3 border-t border-slate-100">
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">Intelligence Source</p>
+              <p className="text-slate-600 text-xs leading-relaxed">
+                {selectedNode.type === "scammer" && "ED: Scammers operate from Cambodia, Myanmar, Laos, Dubai, Thailand"}
+                {selectedNode.type === "mule" && "ED: 2.96 lakh IMEIs, 11.14 lakh SIMs blocked; 1.05 lakh mule accounts identified"}
+                {selectedNode.type === "victim" && "NCCRP: 22.68 lakh complaints in 2024 — 42% increase from 2023"}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                const blob = new Blob([JSON.stringify({ ...selectedNode, timestamp: new Date().toISOString(), source: "MHA/I4C, ED, NCRB 2023-26" }, null, 2)], { type: "application/json" })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement("a")
+                a.href = url; a.download = `intel-${selectedNode.id}.json`; a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="w-full mt-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:opacity-90 transition"
+            >
+              Export Intelligence
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
