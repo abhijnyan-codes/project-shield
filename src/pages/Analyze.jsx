@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react"
-import { analyzeScam } from "../lib/groq"
+import { analyzeScam, analyzeURLOrFile } from "../lib/groq"
 import { transcribeAudio } from "../lib/groq"
 import { generateIncidentReport } from "../lib/reportGenerator"
+import { scanURL } from "../lib/virusTotal"
+import { detectAIImageFromFile } from "../lib/geminiImageDetector"
 import { 
   Shield, 
   Send, 
@@ -14,7 +16,12 @@ import {
   Paperclip, 
   Square, 
   X, 
-  FileDown
+  FileDown,
+  Link2,
+  MessageSquare,
+  Image,
+  Plus,
+  ArrowUp
 } from "lucide-react"
 
 function RiskBadge({ level }) {
@@ -31,7 +38,7 @@ function RiskBadge({ level }) {
   )
 }
 
-// ─── NEW: Scam DNA Match Card ──────────────────────────────────
+// ─── Scam DNA Match Card ──────────────────────────────────
 function DnaMatchCard({ dna }) {
   if (!dna || !dna.campaignName) return null
 
@@ -56,6 +63,32 @@ function DnaMatchCard({ dna }) {
   )
 }
 
+// ─── VirusTotal Stats Display ──────────────────────────────────
+function VirusTotalStats({ stats }) {
+  if (!stats) return null
+  
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap gap-3 text-xs">
+      <span className="flex items-center gap-1">
+        <span className="w-2 h-2 rounded-full bg-red-500" />
+        Malicious: {stats.malicious || 0}
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-2 h-2 rounded-full bg-amber-500" />
+        Suspicious: {stats.suspicious || 0}
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+        Harmless: {stats.harmless || 0}
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-2 h-2 rounded-full bg-slate-300" />
+        Undetected: {stats.undetected || 0}
+      </span>
+    </div>
+  )
+}
+
 function ShieldMessage({ result }) {
   return (
     <div className="flex gap-4 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -68,8 +101,36 @@ function ShieldMessage({ result }) {
           <RiskBadge level={result.riskLevel} />
         </div>
 
+        {/* Show analysis source for URL scans */}
+        {result.isURLScan && (
+          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+            <span className="bg-slate-100 px-2 py-0.5 rounded-full">🤖 AI Analysis</span>
+            {result.vendorStats && (
+              <span className="bg-slate-100 px-2 py-0.5 rounded-full">🔗 VirusTotal</span>
+            )}
+          </div>
+        )}
+
+        {/* Show Gemini model for AI image detection */}
+        {result.model && result.isAIImage !== undefined && (
+          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+            <span className="bg-slate-100 px-2 py-0.5 rounded-full">🧠 Gemini</span>
+            <span className="bg-slate-100 px-2 py-0.5 rounded-full">
+              {result.isAIImage ? `AI: ${result.model}` : `Real Image`}
+            </span>
+            {result.confidence !== undefined && (
+              <span className="bg-slate-100 px-2 py-0.5 rounded-full">
+                {result.confidence}% confidence
+              </span>
+            )}
+          </div>
+        )}
+
         {/* 🧬 Scam DNA Match - Rendered here */}
         {result.dnaMatch && <DnaMatchCard dna={result.dnaMatch} />}
+
+        {/* 🔗 VirusTotal Stats */}
+        {result.vendorStats && <VirusTotalStats stats={result.vendorStats} />}
 
         {result.riskLevel === "HIGH" && (
           <p className="text-red-600 font-bold text-sm bg-red-50 px-3 py-2.5 rounded-lg border border-red-100">
@@ -78,6 +139,40 @@ function ShieldMessage({ result }) {
         )}
 
         <p className="text-sm text-slate-700 leading-relaxed">{result.summary}</p>
+
+        {/* Threat Score for URL scans */}
+        {result.threatScore !== undefined && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500">Threat Score:</span>
+            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full ${
+                  result.threatScore > 70 ? "bg-red-500" : 
+                  result.threatScore > 40 ? "bg-amber-500" : "bg-emerald-500"
+                }`}
+                style={{ width: `${result.threatScore}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold text-slate-700">{result.threatScore}/100</span>
+          </div>
+        )}
+
+        {/* Confidence for AI image detection */}
+        {result.confidence !== undefined && result.model && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500">AI Probability:</span>
+            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full ${
+                  result.confidence > 70 ? "bg-red-500" : 
+                  result.confidence > 40 ? "bg-amber-500" : "bg-emerald-500"
+                }`}
+                style={{ width: `${result.confidence}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold text-slate-700">{result.confidence}%</span>
+          </div>
+        )}
 
         {result.redFlags?.length > 0 && (
           <div className="bg-slate-50 rounded-xl p-4 flex flex-col gap-2.5 border border-slate-100">
@@ -153,7 +248,7 @@ function ShieldMessage({ result }) {
 function UserMessage({ text }) {
   return (
     <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="bg-slate-800 text-white rounded-3xl rounded-tr-sm px-5 py-3.5 max-w-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm">
+      <div className="bg-slate-800 text-white rounded-3xl rounded-tr-sm px-5 py-3.5 max-w-2xl text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm">
         {text}
       </div>
     </div>
@@ -193,10 +288,14 @@ export default function Analyze() {
   const [isProcessingAudio, setIsProcessingAudio] = useState(false)
   const [transcriptionResult, setTranscriptionResult] = useState(null)
   
+  // ─── Scanner Mode ──────────────────────────────────────────────
+  const [scanMode, setScanMode] = useState("scam") // "scam" | "url" | "image"
+  
   const fileInputRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const timerRef = useRef(null)
+  const textareaRef = useRef(null) // Added for auto-expanding textarea
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -207,30 +306,37 @@ export default function Analyze() {
     const file = e.target.files[0]
     if (!file) return
 
-    // Validate file size (max 25MB)
-    if (file.size > 25 * 1024 * 1024) {
-      alert("File too large. Please upload a file under 25MB.")
-      return
+    // ─── IMAGE FILES (for Image Scanner mode) ──────────────────────
+    if (file.type.startsWith("image/")) {
+      const validImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml", "image/bmp"]
+      if (validImageTypes.includes(file.type)) {
+        setAttachment(file)
+        return
+      } else {
+        alert("Please upload a valid image file (JPEG, PNG, GIF, WebP, SVG, or BMP).")
+        return
+      }
     }
 
-    // Validate file type
-    const validTypes = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/m4a", "audio/ogg", "audio/webm", "audio/mp4"]
-    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|ogg|webm|mp4|mpga)$/i)) {
-      alert("Please upload a valid audio file (MP3, WAV, M4A, OGG, WebM, or MP4).")
-      return
-    }
+    // ─── AUDIO FILES (for Scam Message mode) ──────────────────────
+    const validAudioTypes = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/m4a", "audio/ogg", "audio/webm", "audio/mp4"]
+    const validAudioExtensions = /\.(mp3|wav|m4a|ogg|webm|mp4|mpga)$/i
 
-    // If it's an audio file, transcribe it
-    if (file.type.startsWith("audio/") || file.name.match(/\.(mp3|wav|m4a|ogg|webm|mp4|mpga)$/i)) {
+    if (file.type.startsWith("audio/") || validAudioExtensions.test(file.name)) {
+      if (file.size > 25 * 1024 * 1024) {
+        alert("File too large. Please upload a file under 25MB.")
+        return
+      }
       await processAudioFile(file)
-    } else {
-      setAttachment(file)
+      return
     }
+
+    // ─── UNKNOWN FILE TYPE ──────────────────────────────────────────
+    alert("Please upload a valid image (JPEG, PNG, etc.) or audio file (MP3, WAV, etc.).")
   }
 
   // ─── Process Audio File ──────────────────────────────────────────
   const processAudioFile = async (file) => {
-    // Show user message with file name
     setMessages(prev => [...prev, { 
       type: "user", 
       text: `🎤 Uploaded: ${file.name}`
@@ -240,12 +346,7 @@ export default function Analyze() {
     setLoading(true)
 
     try {
-      console.log("Starting transcription for:", file.name, "Size:", file.size, "Type:", file.type)
-      
-      // Transcribe with Whisper
       const transcribedText = await transcribeAudio(file)
-      
-      console.log("Transcription result:", transcribedText)
       
       if (!transcribedText || transcribedText.trim().length === 0) {
         setMessages(prev => [...prev, {
@@ -255,7 +356,7 @@ export default function Analyze() {
             summary: "No speech detected in the audio. Please try a clearer recording with speech.",
             redFlags: [],
             flaggedPhrases: [],
-            advice: "Make sure the audio contains clear speech and try again. Only recordings with speech can be analyzed for scams."
+            advice: "Make sure the audio contains clear speech and try again."
           }
         }])
         setIsProcessingAudio(false)
@@ -263,7 +364,6 @@ export default function Analyze() {
         return
       }
 
-      // Show transcribed text as user message (truncated if long)
       const displayText = transcribedText.length > 200 
         ? transcribedText.substring(0, 200) + "..." 
         : transcribedText
@@ -273,23 +373,17 @@ export default function Analyze() {
         text: `📝 Transcribed: "${displayText}"`
       }])
 
-      // Analyze the transcribed text
       const result = await analyzeScam(transcribedText)
       setMessages(prev => [...prev, { type: "shield", result }])
 
     } catch (err) {
       console.error("Transcription error:", err)
-      
-      // Check if it's a network error
-      const errorMessage = err.message || "Unknown error"
       let userFriendlyMessage = "Transcription failed. Please try again."
-      
-      if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
-        userFriendlyMessage = "Network error. Please check your internet connection and try again."
-      } else if (errorMessage.includes("unsupported") || errorMessage.includes("format")) {
-        userFriendlyMessage = "Audio format not supported. Please try MP3, WAV, or M4A format."
+      if (err.message.includes("network") || err.message.includes("fetch")) {
+        userFriendlyMessage = "Network error. Please check your internet connection."
+      } else if (err.message.includes("unsupported") || err.message.includes("format")) {
+        userFriendlyMessage = "Audio format not supported. Please try MP3, WAV, or M4A."
       }
-      
       setMessages(prev => [...prev, {
         type: "shield",
         result: {
@@ -333,7 +427,7 @@ export default function Analyze() {
               summary: "Recording was too short or silent. Please try again.",
               redFlags: [],
               flaggedPhrases: [],
-              advice: "Speak clearly for at least 3 seconds when recording."
+              advice: "Speak clearly for at least 3 seconds."
             }
           }])
           return
@@ -373,13 +467,30 @@ export default function Analyze() {
     }
   }
 
+  // ─── Auto-Resize Textarea ───────────────────────────────────────
+  const handleInputChange = (e) => {
+    setInput(e.target.value)
+    if (textareaRef.current) {
+      // Reset height to auto to calculate shrinkage if user deletes text
+      textareaRef.current.style.height = "auto"
+      // Set new height based on scrollHeight, capped at 200px
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
+    }
+  }
+
   // ─── Send Text ──────────────────────────────────────────────────
   async function handleSend(textOverride) {
     const userText = textOverride || input
     if (!userText.trim() && !attachment) return
 
     const displayMessage = userText.trim() ? userText : `[Attached File: ${attachment?.name}]`
+    
     setInput("")
+    // Reset textarea height after sending
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto"
+    }
+
     const currentAttachment = attachment
     setAttachment(null)
     
@@ -387,9 +498,115 @@ export default function Analyze() {
     setLoading(true)
     
     try {
-      const result = await analyzeScam(userText || "No text provided") 
+      let result
+
+      // ─── URL Scanner Mode ──────────────────────────────────────
+      if (scanMode === "url") {
+        const aiResult = await analyzeURLOrFile(userText)
+        let vtResult = null
+        try {
+          vtResult = await scanURL(userText)
+        } catch (e) {
+          console.warn("VirusTotal unavailable:", e)
+        }
+        
+        const redFlags = []
+        if (aiResult.redFlags) {
+          aiResult.redFlags.forEach(flag => {
+            redFlags.push({
+              type: flag.type || "AI Analysis",
+              detail: flag.detail || flag
+            })
+          })
+        }
+        if (vtResult && vtResult.redFlags) {
+          vtResult.redFlags.forEach(flag => {
+            if (!redFlags.some(f => f.detail === flag.detail)) {
+              redFlags.push(flag)
+            }
+          })
+        }
+        
+        const riskLevels = { LOW: 0, MEDIUM: 1, HIGH: 2 }
+        const aiRisk = riskLevels[aiResult.riskLevel] || 0
+        const vtRisk = vtResult ? riskLevels[vtResult.riskLevel] || 0 : 0
+        const finalRisk = Object.keys(riskLevels).find(k => riskLevels[k] === Math.max(aiRisk, vtRisk)) || "LOW"
+        
+        let vendorStats = null
+        if (vtResult && vtResult.vendorStats) {
+          vendorStats = vtResult.vendorStats
+        }
+        
+        let summary = aiResult.summary || ""
+        if (vtResult && vtResult.summary && !vtResult.isFallback) {
+          summary = summary + " — " + vtResult.summary
+        }
+        
+        result = {
+          riskLevel: finalRisk,
+          summary: summary,
+          redFlags: redFlags,
+          flaggedPhrases: aiResult.flaggedPhrases || [],
+          advice: aiResult.advice || vtResult?.advice || "Proceed with caution.",
+          vendorStats: vendorStats,
+          threatScore: aiResult.threatScore || (finalRisk === "HIGH" ? 85 : finalRisk === "MEDIUM" ? 55 : 20),
+          isURLScan: true,
+        }
+      }
+      // ─── Image Scanner Mode ────────────────────────────────────
+      else if (scanMode === "image") {
+        if (currentAttachment && currentAttachment.type.startsWith("image/")) {
+          // User uploaded an actual image file → Use Gemini
+          const detection = await detectAIImageFromFile(currentAttachment)
+          
+          // Also run text analysis on user description (if any)
+          let descriptionResult = null
+          if (userText && userText.trim()) {
+            try {
+              descriptionResult = await analyzeURLOrFile(userText)
+            } catch (e) {
+              console.warn("Description analysis failed:", e)
+            }
+          }
+          
+          // Combine results
+          const redFlags = [...detection.redFlags]
+          if (descriptionResult && descriptionResult.redFlags) {
+            descriptionResult.redFlags.forEach(flag => {
+              if (!redFlags.some(f => f.detail === flag.detail)) {
+                redFlags.push(flag)
+              }
+            })
+          }
+          
+          result = {
+            riskLevel: detection.riskLevel,
+            summary: detection.summary + (descriptionResult ? " — " + descriptionResult.summary : ""),
+            redFlags: redFlags,
+            flaggedPhrases: descriptionResult?.flaggedPhrases || [],
+            advice: detection.advice + " " + (descriptionResult?.advice || ""),
+            confidence: detection.confidence,
+            model: detection.model || "Unknown",
+            isAIImage: detection.isAIGenerated || false,
+            isURLScan: false,
+          }
+        } else {
+          // No image uploaded — just run text analysis on the description
+          result = await analyzeURLOrFile(userText || "No description provided")
+          result.summary = "🖼️ Image Description Analysis: " + result.summary
+          result.redFlags.push({ type: "Image Analysis", detail: "Description analyzed for scam indicators." })
+          result.confidence = result.threatScore || 50
+          result.isURLScan = false
+        }
+      }
+      // ─── Scam Message Mode ─────────────────────────────────────
+      else {
+        result = await analyzeScam(userText || "No text provided")
+      }
+      
       setMessages(prev => [...prev, { type: "shield", result }])
     } catch (err) {
+      console.error("Analysis error:", err)
       setMessages(prev => [...prev, {
         type: "shield",
         result: {
@@ -419,13 +636,13 @@ export default function Analyze() {
     return `${mins}:${secs}`
   }
 
-  // ─── The Multi-modal Input Pill ──────────────────────────────────
+  // ─── The Multi-modal Input Box (Chat Style) ──────────────────────
   const InputPill = (
-    <div className="relative flex flex-col w-full bg-white/90 backdrop-blur-md border border-slate-200 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.1)] rounded-[32px] pt-2 pb-1.5 px-2 focus-within:bg-white focus-within:border-orange-300 focus-within:ring-4 focus-within:ring-orange-50 transition-all">
+    <div className="relative flex flex-col w-full bg-white border border-slate-300 shadow-sm shadow-slate-200/50 rounded-3xl overflow-hidden focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400 transition-all">
       
-      {/* Attachment Preview Chip */}
+      {/* Attachments & Recording Badges */}
       {attachment && (
-        <div className="flex items-center gap-2 mx-4 mt-1 mb-1 px-3 py-1.5 bg-orange-50 text-orange-700 text-xs font-semibold rounded-xl w-max border border-orange-100 animate-in fade-in slide-in-from-bottom-1">
+        <div className="flex items-center gap-2 mx-4 mt-3 px-3 py-1.5 bg-orange-50 text-orange-700 text-xs font-semibold rounded-xl w-max border border-orange-100 animate-in fade-in slide-in-from-bottom-1">
           <Paperclip className="w-3.5 h-3.5" />
           <span className="truncate max-w-[150px]">{attachment.name}</span>
           <button 
@@ -437,35 +654,42 @@ export default function Analyze() {
         </div>
       )}
 
-      {/* Recording Indicator */}
       {isRecording && (
-        <div className="flex items-center gap-2 mx-4 mt-1 mb-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-semibold rounded-xl w-max border border-red-200 animate-pulse">
+        <div className="flex items-center gap-2 mx-4 mt-3 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-semibold rounded-xl w-max border border-red-200 animate-pulse">
           <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
           Recording... {formatTime(recordingTime)}
         </div>
       )}
 
-      {/* Processing Indicator */}
       {isProcessingAudio && (
-        <div className="flex items-center gap-2 mx-4 mt-1 mb-1 px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-semibold rounded-xl w-max border border-blue-200 animate-pulse">
+        <div className="flex items-center gap-2 mx-4 mt-3 px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-semibold rounded-xl w-max border border-blue-200 animate-pulse">
           <span className="w-2 h-2 bg-blue-500 rounded-full animate-spin" />
           Transcribing audio with Whisper...
         </div>
       )}
 
-      <div className="flex items-end gap-2 w-full">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Paste message, upload screenshot, or record..."
-          className="flex-1 max-h-[200px] min-h-[44px] py-2.5 px-5 resize-none bg-transparent outline-none text-slate-700 placeholder:text-slate-400 text-[15px] leading-relaxed"
-          rows={1}
-        />
+      {/* Auto-expanding Text Area */}
+      <textarea
+        ref={textareaRef}
+        value={input}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        placeholder={
+          scanMode === "url" 
+            ? "Paste a suspicious URL or describe a file..." 
+            : scanMode === "image"
+            ? "Describe the image or upload a screenshot..."
+            : "Paste message, upload screenshot, or record..."
+        }
+        className="w-full max-h-[200px] min-h-[52px] pt-3 pb-2 px-4 resize-none bg-transparent outline-none text-slate-800 placeholder:text-slate-500 text-[15px] leading-relaxed overflow-y-auto"
+        rows={1}
+      />
+      
+      {/* Bottom Action Bar */}
+      <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
         
-        {/* Action Button Group */}
-        <div className="flex items-center gap-1.5 mb-1 mr-1 flex-shrink-0">
-          
+        {/* Left Side Controls (Upload) */}
+        <div className="flex items-center gap-1">
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -473,33 +697,35 @@ export default function Analyze() {
             className="hidden" 
             accept="audio/*,image/*" 
           />
-          
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
             title="Upload image or audio"
           >
-            <Paperclip className="w-4.5 h-4.5" />
+            <Plus className="w-5 h-5" /> 
           </button>
+        </div>
 
+        {/* Right Side Controls (Mic & Send) */}
+        <div className="flex items-center gap-1">
           <button
             onClick={handleMicToggle}
-            className={`p-2.5 rounded-full transition-all ${
+            className={`p-2 rounded-full transition-all ${
               isRecording 
-                ? 'text-red-500 bg-red-50 hover:bg-red-100 animate-pulse shadow-sm' 
+                ? 'text-red-500 bg-red-50 hover:bg-red-100 animate-pulse' 
                 : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
             }`}
             title={isRecording ? "Stop recording" : "Record audio"}
           >
-            {isRecording ? <Square className="w-4.5 h-4.5" fill="currentColor" /> : <Mic className="w-4.5 h-4.5" />}
+            {isRecording ? <Square className="w-5 h-5" fill="currentColor" /> : <Mic className="w-5 h-5" />}
           </button>
 
           <button
             onClick={() => handleSend()}
             disabled={loading || isProcessingAudio || (!input.trim() && !attachment && !isRecording)}
-            className="w-10 h-10 ml-1 rounded-full bg-[#ffab8a] hover:bg-orange-500 text-white flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-9 h-9 ml-1 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center transition-all disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed shadow-sm"
           >
-            <Send className="w-4 h-4 ml-0.5" />
+            <ArrowUp className="w-4 h-4 ml-[1px]" />
           </button>
         </div>
       </div>
@@ -515,17 +741,71 @@ export default function Analyze() {
             <Shield className="w-7 h-7 text-orange-600" />
           </div>
 
-          <h1 className="font-display font-bold text-3xl text-slate-900 tracking-tight">Describe your situation</h1>
+          <h1 className="font-display font-bold text-3xl text-slate-900 tracking-tight">
+            {scanMode === "url" 
+              ? "🔗 Scan URL or File" 
+              : scanMode === "image"
+              ? "🖼️ Image Scanner"
+              : "Describe your situation"}
+          </h1>
           <p className="text-slate-500 text-sm mt-3 max-w-sm text-center leading-relaxed">
-            Paste a suspicious message, upload a screenshot, or record a call
+            {scanMode === "url" 
+              ? "Paste a suspicious link or file name for instant threat analysis." 
+              : scanMode === "image"
+              ? "Upload a screenshot or describe an image for forensic analysis."
+              : "Paste a suspicious message, upload a screenshot, or record a call."
+            }
           </p>
 
+          {/* ─── Mode Toggle ────────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-2 mt-4 bg-white border border-slate-200 rounded-full p-1 shadow-sm">
+            <button 
+              onClick={() => setScanMode("scam")} 
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1 ${
+                scanMode === "scam" 
+                  ? "bg-[var(--color-danger)] text-white" 
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Scam</span>
+            </button>
+            <button 
+              onClick={() => setScanMode("url")} 
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1 ${
+                scanMode === "url" 
+                  ? "bg-[var(--color-danger)] text-white" 
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span>URL</span>
+            </button>
+            <button 
+              onClick={() => setScanMode("image")} 
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1 ${
+                scanMode === "image" 
+                  ? "bg-[var(--color-danger)] text-white" 
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Image className="w-3.5 h-3.5" />
+              <span>Image</span>
+            </button>
+          </div>
+
           <button
-            onClick={() => handleSend(EXAMPLE)}
+            onClick={() => handleSend(
+              scanMode === "url" 
+                ? "https://icici-secure-login.xyz/verify-account" 
+                : scanMode === "image"
+                ? "A screenshot of a bank statement showing a transaction of ₹50,000 to 'RBI Verification Fund'. The font looks slightly off, and the logo is pixelated."
+                : EXAMPLE
+            )}
             className="mt-6 flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-blue-600 bg-white border border-blue-200 rounded-xl hover:bg-blue-50 transition shadow-sm"
           >
             <FileText className="w-3.5 h-3.5" />
-            Try an example
+            {scanMode === "url" ? "Try a suspicious URL" : scanMode === "image" ? "Try a fake image description" : "Try an example"}
           </button>
 
           <div className="flex items-center gap-4 text-[10px] text-slate-400 font-bold tracking-[0.15em] uppercase mt-8 mb-6">

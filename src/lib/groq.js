@@ -190,6 +190,51 @@ export async function analyzeCyberSafe(inputText) {
   return JSON.parse(completion.choices[0].message.content)
 }
 
+// ── URL & File Scanner (AI-based fallback for VirusTotal) ──────
+export const URL_SCANNER_SYSTEM_PROMPT = `You are Project Shield's advanced threat intelligence engine.
+
+Analyze the user's input (a URL, file name, or suspicious link) for scam and phishing indicators.
+
+Act like a threat intelligence platform. Provide:
+1. A **Threat Score** (0-100 based on how dangerous it looks).
+2. A list of **"Vendor Detections"** (simulate 3-4 antivirus engines flagging it, e.g., "BitDefender", "Kaspersky", "McAfee").
+3. **Red Flags** (Phishing, Typosquatting, Suspicious File Type, etc.).
+4. **Actionable Advice**.
+
+Respond ONLY with valid JSON in this exact structure:
+{
+  "threatScore": 0-100,
+  "vendorDetections": [
+    { "vendor": "BitDefender", "result": "Phishing.URL" },
+    { "vendor": "Kaspersky", "result": "Heuristic.Suspicious" },
+    { "vendor": "McAfee", "result": "Trojan.Generic" }
+  ],
+  "riskLevel": "LOW" | "MEDIUM" | "HIGH",
+  "summary": "What this is",
+  "redFlags": [
+    { "type": "Phishing", "detail": "Impersonates ICICI Bank" }
+  ],
+  "advice": "Clear action advice"
+}
+
+Rules:
+- If the input is a URL, look for typosquatting (e.g., "icici-secure-login.xyz").
+- If the input is a file name, flag dangerous extensions like .exe, .scr, .vbs.
+- Be decisive. Do not hedge.`
+
+export async function analyzeURLOrFile(inputText) {
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [
+      { role: "system", content: URL_SCANNER_SYSTEM_PROMPT },
+      { role: "user", content: inputText },
+    ],
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+  })
+  return JSON.parse(completion.choices[0].message.content)
+}
+
 // ── Alias for backward compatibility ────────────────────────────
 export const analyzeCyberbullying = analyzeCyberSafe
 
